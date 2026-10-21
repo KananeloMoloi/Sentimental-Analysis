@@ -1,102 +1,22 @@
-# Sentiment Insights — Project Documentation
+# Sentiment Insights — Groq edition
 
-Groq edition | 21 October 2026
+Review sentiment dashboard with CSV input, positive/negative/neutral/mixed labels, topic and emotion breakdown, generated insights, Q&A and report export. No npm dependencies needed. Node 22+.
 
-## 1. Project overview
+## Setup
+1. Obtain a Groq key at https://console.groq.com/keys.
+2. Copy `.env.example` to `.env` in the project root.
+3. Set `GROQ_API_KEY=gsk_...` and optionally `GROQ_MODEL=openai/gpt-oss-20b`.
+4. Run `npm start`, open http://localhost:3000.
+5. Run `npm test` to run local mock tests without consuming API quota.
 
-Sentiment Insights is a web-based dashboard that uses the Groq API to classify customer review sentiment, summarize themes and emotions, generate AI insights, and answer questions about analyzed reviews. It accepts review data, displays aggregated results, and exports reports.
+If you already have `.env.local` or deployment variables with Gemini settings, remove those old settings and add Groq ones. Never commit or share API keys. For Vercel add GROQ_API_KEY and GROQ_MODEL in project environment settings and redeploy.
 
-## 2. Core functionality
+## Processing
+Reviews are processed sequentially in batches of 5 to reduce free-tier throttling. The progress bar smoothly estimates progress between completed batches and shows measured progress on completion. The backend retries timeouts, 429 and temporary server errors up to twice, respecting `Retry-After` where provided; the frontend does not multiply those retries. A single request may take up to ~65 seconds with retries; frontend allows 75 seconds. Progress is not a precise server-side streaming percentage. Insights failure does not discard successful review results.
 
-• Review input including CSV import and sample review data.
-• Classification: positive, negative, neutral, or mixed.
-• Emotion, topic, summary, score and confidence output per review.
-• Dashboard charts and aggregate sentiment statistics.
-• AI-generated insights and question-answering based on results.
-• CSV and JSON exports.
+Groq free-tier limits vary by model and account; see https://console.groq.com/docs/rate-limits. Live API access cannot be tested without your own key.
 
-## 3. Technology stack
+## Deploy on Netlify
+This repository includes `netlify.toml` and four Netlify Functions, preserving `/api/analyze`, `/api/insights`, `/api/ask`, and `/api/health` routes. Import the repository into Netlify and set **Base directory** to `sentiment-insights` only if your Git repository contains an outer `sentiment-insights` folder. Otherwise leave Base directory empty. Netlify reads `netlify.toml` and publishes the `public` folder containing `index.html`.
 
-Frontend: HTML, CSS and vanilla JavaScript in public/. Backend: Node.js 22+ using built-in fetch and HTTP modules. AI provider: Groq chat completions REST API. No npm runtime dependencies are declared. Tests: built-in Node.js test runner.
-
-## 4. Architecture and data flow
-
-Browser → /api/analyze (reviews in batches of 5) → lib/analysis.js → lib/groq.js → Groq API. The browser accumulates analysis results, then calls /api/insights to calculate statistics and request narrative insights. /api/ask answers questions about current results. /api/health reports configuration status without exposing secrets.
-
-## 5. Project structure
-
-public/index.html — application page
-public/app.js — client interactions, batching, progress, charts, exports
-public/styles.css — styling
-public/sample_reviews.csv — example dataset
-api/analyze.js — analysis endpoint
-api/insights.js — statistics and AI insights endpoint
-api/ask.js — question-answering endpoint
-api/health.js — configuration health endpoint
-lib/analysis.js — validation, aggregation and AI prompts
-lib/groq.js — Groq REST client, timeouts and retries
-lib/http.js — API handler and request utilities
-dev-server.js — local development server
-vercel.json — Vercel deployment settings
-test/ — automated tests
-
-## 6. Local installation
-
-Prerequisite: Node.js 22 or newer.
-1. Extract the project ZIP and open sentiment-insights/.
-2. Copy .env.example to .env.
-3. Enter GROQ_API_KEY and optionally GROQ_MODEL.
-4. Run npm start.
-5. Open http://localhost:3000.
-6. Run npm test to execute local tests without spending API quota.
-
-## 7. Environment variables
-
-GROQ_API_KEY — required secret, issued by GroqCloud.
-GROQ_MODEL — optional; defaults to openai/gpt-oss-20b.
-ACCESS_CODE — optional deployment access protection.
-RATE_LIMIT_PER_MIN — optional request rate setting; example 60.
-Never expose API keys in public JavaScript or commit .env files.
-
-## 8. API endpoints
-
-GET /api/health — returns ok, model, configured, requiresAccessCode and maxTexts.
-POST /api/analyze — JSON: {"texts":["Great service"],"offset":0}; returns {"results":[...]}.
-POST /api/insights — JSON: {"results":[...]}; returns stats, insights and insightsError.
-POST /api/ask — JSON: {"question":"What are the common complaints?","results":[...]}; returns answer.
-Requests may require an access code if ACCESS_CODE is configured. Follow the frontend implementation for its header convention.
-
-## 9. Progress, retries and timeouts
-
-The frontend processes reviews sequentially in batches of five. Its progress indicator animates an estimated percentage during a request, confirms progress after each completed batch, allocates approximately 0–85% to analysis and 85–100% to insights, and is not a streamed server measurement. The Groq client uses a 20-second per-attempt timeout and up to two retries for temporary network/API failures (including 429 and 5xx), with backoff and Retry-After support. The browser uses a 75-second timeout for API requests. Long operations can still fail under hosting limits.
-
-## 10. Error handling
-
-Missing key: configure GROQ_API_KEY on the server.
-401/403: verify Groq key and permissions.
-404: verify GROQ_MODEL.
-429: free-tier rate limit; reduce load and wait.
-502/503/504 or timeouts: retry later, reduce batch size, and check server logs.
-If insight generation fails, successful review statistics can still be returned and the UI offers regeneration.
-
-## 11. Deployment
-
-Vercel: the repository includes vercel.json with API functions and a public/ output directory. Add GROQ_API_KEY and GROQ_MODEL to project environment settings and redeploy. Function duration and provider plan limits must be checked.
-Netlify: the ZIP is NOT configured for Netlify as-is. It needs Netlify Functions or a compatible backend adapter, API route rewrites, build/publish configuration, and validation against function time limits. Do not assume that deploying the current ZIP directly will make /api/* work.
-
-## 12. Testing and acceptance criteria
-
-Run npm test for automated API, server and analysis tests. With a valid Groq key, manually verify: health status; a single review; CSV upload; progress during multiple batches; correct sentiment dashboard; insights; Q&A; CSV and JSON export; and handling of invalid key, throttling and temporary API failures. Automated tests do not guarantee live Groq connectivity or hosting compatibility.
-
-## 13. Limitations and future improvements
-
-The progress percentage is an estimate between completed batches. AI output can be imperfect or inconsistent; validate high-stakes decisions independently. Free-tier rate limits may change. Serverless execution limits may interrupt larger jobs. Potential improvements: background job processing, resumable batch analysis, better observability, user authentication, and Netlify-specific deployment support.
-
-## 14. Resources
-
-Groq console: https://console.groq.com/keys
-Groq limits: https://console.groq.com/docs/rate-limits
-Node.js: https://nodejs.org/
-Vercel: https://vercel.com/docs
-Netlify Functions: https://docs.netlify.com/build/functions/overview/
-
+In Netlify project settings, add `GROQ_API_KEY` and optionally `GROQ_MODEL=openai/gpt-oss-20b` as environment variables for Functions, then redeploy. Do not add your `.env` file to the repository. Test `/api/health` on the deployed domain; `configured` should be true. Netlify function execution limits can still affect large datasets or prolonged Groq retries; start with 1–5 reviews. For drag-and-drop static deployment, the HTML may display, but API functions are not deployed automatically: use a Git-connected or CLI deployment that includes functions.
